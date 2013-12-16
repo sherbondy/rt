@@ -231,7 +231,7 @@ Every subsection in Htrace could probably be its own namespaced module...
 
 ;; Plane is defined by a normal (its a 2 sided plane though) and a distance.
 ;; The plane coincident with y=5 and normal (0,0,1) has distance -5.
-(ann-datatype Plane [normal:- Vector3, distance :- Number, material-fn :- MaterialFn])
+(ann-datatype Plane [normal :- Vector3, distance :- Number, material-fn :- MaterialFn])
 (deftype Plane [normal distance material-fn]
   Shape
   (intersect [this {:keys [base direction] :as ray}]
@@ -257,3 +257,51 @@ Every subsection in Htrace could probably be its own namespaced module...
              (if (< t1 t2) [t1 i1] [t2 i2]))]
     (second (reduce select-nearest (first xs) (rest xs)))))
 
+
+
+;; LIGHTS
+
+(ann point-is-lit? [Point3 Point3 -> Boolean])
+(defn point-is-lit? [point light-pos shapes]
+  "Helper to calculate the diffuse light at the surface normal, given
+   the light direction (from light source to surface)"
+  (let [path (- light-pos point)
+        time-at-light (mag path)
+        ray (Ray. point (normalize path))
+        hits (concat (map #(intersect % ray) shapes))
+        times (map first hits)]
+    (if (empty? times)
+      true
+      (> (min times) time-at-light))))
+
+(ann diffuse-coeff [Vector3 Vector3 -> Number])
+(defn diffuse-coeff [light-dir normal]
+  "Helper to calculate the diffuse light at the surface normal, given
+   the light direction (from light source to surface)"
+  (max 0.0 (negate (dot (normalize light-dir) (normalize normal)))))
+
+(ann-protocol Light
+  local-light [Light Intersection -> Color])
+(defprotocol> Light
+  (local-light [light intersection]))
+
+(ann-datatype Directional [direction :- Vector3, color :- Color])
+(deftype Directional [direction light-color]
+  Light
+  (local-light [light {:keys [normal material] :as intersection}]
+    (let [mixed-color (col* (:color material) light-color)
+          diffuse     (k*col (* (diffuse-coeff direction normal)
+                                (:diffuseness material))
+                             mixed-color)])))
+
+(ann-datatype Spotlight [point :- Point3, color :- Color])
+(deftype Spotlight [light-pos light-color]
+  Light
+  (local-light [light {:keys [normal point material] :as intersection}]
+    (let [mixed-color (col* (:color material) light-color)
+          diffuse     (k*col (* (diffuse-coeff (- point light-pos) normal)
+                                (:diffuseness material))
+                             mixed-color)]
+      (if (point-is-lit? point light-pos)
+        diffuse
+        black))))
