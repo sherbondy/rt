@@ -4,4 +4,5 @@
                  [org.clojure/core.typed "0.2.19"]
                  [org.clojure/math.numeric-tower "0.0.2"]]
   :core.typed {:check
-               [rt.core]})
+               [rt.core]}
+  :main rt.core)
