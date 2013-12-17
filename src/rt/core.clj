@@ -19,6 +19,9 @@ Later:
 I wish my text editor rendered markdown in comments!
 
 Every subsection in Htrace could probably be its own namespaced module...
+
+Should really be using native arrays instead of records and vectors...
+Maybe I should make a cljs backend for core.matrix that uses typed array buffers as the backing store?
 """
 
 (ann-record Vector3 [x :- Number, y :- Number, z :- Number])
@@ -76,16 +79,26 @@ Every subsection in Htrace could probably be its own namespaced module...
 
 ;; how do I define an alias for a record?
 ;; wish I could just do:
-;;(def Point3 Vector3), or something along those lines...
+;;(defalias Point3 Vector3), or something along those lines...
 ;;(Point3. 1 2 3)
 ;; I can define a union type for Vector3 and Point3...
 (ann-record Point3 [x :- Number, y :- Number, z :- Number])
 (defrecord Point3 [x y z])
 
 ;; could I just reuse v+ with some core.typed cleverness?
+;; make a union type, and have the function dispatch on the arg order...
+;; really seems like I should implement + as a multimethod
+(ann p+ [Point3 Point3 -> Vector3])
+(defn p+ [{:keys [x y z]} {a :x b :y c :z}]
+  (Vector3. (+ x a) (+ y b) (+ z c)))
+
 (ann p+v [Point3 Vector3 -> Point3])
 (defn p+v [{:keys [x y z]} {a :x b :y c :z}]
   (Point3. (+ x a) (+ y b) (+ z c)))
+
+(ann k*p [Number Point3 -> Point3])
+(defn k*p [c {:keys [x y z]}]
+  (Point3. (* c x) (* c y) (* c z)))
 
 ;; now I am feeling the pain, should really be using multimethods to define addition
 ;; maybe I should make a macro for commutative operations?
@@ -305,3 +318,123 @@ Every subsection in Htrace could probably be its own namespaced module...
       (if (point-is-lit? point light-pos)
         diffuse
         black))))
+
+
+;; REFLECTIONS: global lighting model
+
+(declare raytrace)
+
+(ann reflected-ray [Integer Intersection -> Color])
+(defn reflected-ray [depth {:keys [normal point ray material] :as intersection}]
+  (if (= (:reflectivity material) 0.0)
+    black
+    (let [neg-in-dir (neg (:direction ray))
+          k (* 2 (dot (normalize normal) (normalize neg-in-dir)))
+          out-ray-dir (- (k*v k (normalize normal)) neg-in-dir)
+          reflected-col (raytrace (inc depth)
+                                  (Ray. point out-ray-dir))]
+      (k*col (:reflectivity material)
+             reflected-col))))
+
+;; VIEWING AND SCREEN
+
+(ann-record View [camera-pos :- Point3, view-dist :- Number,
+                  looking-at :- Point3, view-up :- Vector3])
+(defrecord View [camera-pos view-dist looking-at view-up])
+
+(def-alias LightVector (IPersistentVector Light))
+(def-alias ShapeVector (IPersistentVector Shape))
+
+(ann-record Scene [view :- View, shapes :- ShapeVector,
+                   background-color :- Color, ambient-light :- Color,
+                   lights :- LightVector])
+(defrecord Scene [view shapes background-color ambient-light lights])
+
+(def> default-scene :- Scene
+  (Scene.
+   (View. (Point3. 0 0 -100) 100 (Point3. 0 0 100) (Vector3. 0 -1 0))
+   [(Plane. (Vector3. 0 -1 0) 50 shiny-red)
+    (Sphere. (Vector3. 50 10 100) 40 semi-shiny-green)
+    (Sphere. (Vector3. -80 0 80) 50 checked-matt)]
+   black
+   (Color. 0.1 0.1 0.1)
+   [(Spotlight. (Point3. 100 -30 0) nearly-white)
+    (Spotlight. (Point3. -100 -100 150) nearly-white)]))
+
+;; why do they have x and y flipped in Htrace?
+;; this fn seems like a hack: should probably just do matrix math?
+;; incomplete...
+(ann pixel-grid [View Number Number -> (IPersistentVector Point3)])
+(defn pixel-grid [{:keys [camera-pos view-dist looking-at view-up]}
+                  width height]
+  (let [grid (for [x (range width) y (range height)] (Point3. x y 0.0))
+        center-offset (Vector3. (* -0.5 width) (* -0.5 height) 0)
+        pixel-offsets (map #(p+v % center-offset) grid)
+        ;; view dir should be a vector!
+        view-dir (normalize (p+ looking-at (k*p -1 camera-pos)))
+        screen-center (p+v camera-pos (k*v view-dist view-dir))
+        view-right (cross view-dir view-up)]
+        (letfn> [transform :- [Point3 -> Point3]
+                (transform [{:keys [x y]}]
+                  (p+v (p+v screen-center (k*v x view-right))
+                       (k*v y (neg view-up))))]
+          (map transform pixel-offsets))))
+;; direly need to test
+
+;; it is beautiful how add is implicitly defined for compound types
+;; in haskell...
+
+(ann parallel-projection [View Point3 -> Ray])
+(defn parallel-projection [{:keys [camera-pos looking-at]} point]
+  "Create rays parallel to viewing screen (orthographic)"
+  (Ray. point (normalize (p+ looking-at (k*p -1 camera-pos)))))
+
+(ann perspective-projection [View Point3 -> Ray])
+(defn perspective-projection [{:keys [camera-pos]} point]
+  "Perspective projection which creates rays through
+  (0,0,-distance) through the point"
+  (Ray. point (normalize (p+ point (k*p -1 camera-pos)))))
+
+
+;; MAIN RENDERING FUNCTIONS
+
+(def> max-bounce-depth :- Int 2)
+
+;; my version explicitly takes the ambient-light and scene lights as args
+;; boo for global variables...
+;; maybe we should take the desired number of bounces as an arg...
+(ann overall-lighting [LightVector Color
+                       Int Intersection -> Color])
+(defn overall-lighting [lights ambient-light depth hit]
+  "Calculate the overall color of a ray/shape intersection, taking into account
+  local lighting (diffuse only) and global lighting (reflections only, to a depth
+  of 2 bounces)"
+  (letfn [(sum-colors [colors] (reduce col+ black colors))]
+    (let [local-lighting (col+ ambient-light
+                               (sum-colors (map #(local-light % hit) lights)))
+          global-lighting (if (< depth max-bounce-depth)
+                            (reflected-ray depth hit)
+                            black)]
+      (clamp (col+ local-lighting global-lighting)))))
+
+;; explicitly takes the shapes vector as an argument instead of using
+;; a global variable (ditto  for background-color)
+(ann raytrace [ShapeVector LightVector Color Color Int Ray -> Color])
+(defn raytrace [shapes lights ambient-light background-color depth ray]
+  (let [hits (concat (map #(intersect % ray) shapes))]
+    (if (empty? hits)
+      background-color
+      (overall-lighting ambient-light lights depth (closest hits)))))
+
+;; I separated render from render-to-pgm since I want to have multiple output targets
+;; (e.g. the html canvas element)
+;; explicitly take a scene as an argument... (contains view, shapes, and lighting...)
+(ann render [Scene Number Number -> (IPersistentVector Color)])
+(defn render [{:keys [view shapes background-color ambient-light lights]}
+              width height]
+  (letfn> [projection :- [View Point3 -> Ray]
+           (projection [point] (perspective-projection view point))]
+    (let [ray-collection (map projection (pixel-grid view width height))
+          color-collection (map (partial raytrace shapes background-color 0)
+                                ray-collection)]
+      color-collection)))
