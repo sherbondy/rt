@@ -294,10 +294,10 @@ typed array buffers as the backing store?
         (let [t (/ v0 vd)
               hit-point (position-at-time ray t)]
           (if (> t epsilon)
-            [t (Intersection.
-                (if (> vd 0) (neg normal) normal)
-                hit-point ray (material-fn hit-point))]
-            '()))))))
+            [[t (Intersection.
+                  (if (> vd 0) (neg normal) normal)
+                  hit-point ray (material-fn hit-point))]]
+            []))))))
 
 ;; might this get an empty vector as the argument?
 ;; In which case the result would be nil.
