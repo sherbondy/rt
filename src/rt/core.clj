@@ -428,8 +428,8 @@ typed array buffers as the backing store?
 (defn pixel-grid [{:keys [camera-pos view-dist looking-at view-up]}
                   width height]
   (let [grid (for> :- Point3
-                   [x :- Number (range width)
-                    y :- Number (range height)]
+                   [y :- Number (range width)
+                    x :- Number (range height)]
                    (Point3. x y 0.0))
         center-offset (Vector3. (* -0.5 width) (* -0.5 height) 0)
         pixel-offsets (map (ann-form #(p+v % center-offset)
@@ -524,7 +524,7 @@ typed array buffers as the backing store?
 (ann -main [-> Any])
 (defn -main []
   (spit "test.ppm"
-    (make-ppm 500 500
-              (render default-scene 500 500))))
+    (make-ppm 100 100
+              (render default-scene 100 100))))
 
 (-main)
