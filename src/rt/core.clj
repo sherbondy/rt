@@ -313,12 +313,13 @@ typed array buffers as the backing store?
 ;; LIGHTS
 
 ;; does this capture the fact that the result may be empty?
+;; this is broken!
 (ann combined-hits [ShapeVector Ray -> TimeIntersectSeq])
 (defn combined-hits [shapes ray]
   (filter not-empty
-          (concat (map (ann-form #(intersect % ray)
+          (apply concat (map (ann-form #(intersect % ray)
                                  [Shape -> TimeIntersectSeq])
-                       shapes))))
+                         shapes))))
 
 ;; something is TERRIBLY wrong: hits is returning color instead
 ;; of intersect time vecs...
@@ -331,10 +332,9 @@ typed array buffers as the backing store?
         ray (Ray. point (normalize path))
         hits (combined-hits shapes ray)
         times (map first hits)]
-    (println hits)
     (if (empty? times)
       true
-      (> (min times) time-at-light))))
+      (> (apply min times) time-at-light))))
 
 (ann diffuse-coeff [Vector3 Vector3 -> Number])
 (defn diffuse-coeff [light-dir normal]
