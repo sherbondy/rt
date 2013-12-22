@@ -1,28 +1,40 @@
 (ns rt.core
   (:require [clojure.core.typed :as typed
-             :refer [ann ann-datatype ann-many ann-protocol ann-record
+             :refer [ann ann-datatype ann-form ann-many
+                     ann-protocol ann-record
                      def-alias def> defprotocol>
-                     letfn>]]
-            [clojure.math.numeric-tower :as math]))
+                     for> letfn>
+                     AnyInteger]]
+            [clojure.math.numeric-tower :as math])
+  (:import [clojure.lang IPersistentVector ISeq Seqable]))
 
 """
 This is a ray tracer written in Clojure/Script.
-It attempts to be a simple port of [Htrace](http://nobugs.org/developer/htrace/htrace.hs)
+It attempts to be a simple port of
+[Htrace](http://nobugs.org/developer/htrace/htrace.hs).
+
 My goals in writing it are initially to:
 - Explore core.typed
 - Write a simple system and test as I go.
 Later:
 - Write an *explainable*, visual program
 - Use a pipeline so people can *explore* and see intermediate outputs...
-- Try interesting optimizations, potentially using glsl, web workers, or both.
-- Try doing client-side previews with server-side rendering, sharing most of the clojure code.
+- Try interesting optimizations, potentially using glsl,
+  web workers, or both.
+- Try doing client-side previews with server-side rendering,
+  sharing most of the clojure code.
 I wish my text editor rendered markdown in comments!
 
 Every subsection in Htrace could probably be its own namespaced module...
 
 Should really be using native arrays instead of records and vectors...
-Maybe I should make a cljs backend for core.matrix that uses typed array buffers as the backing store?
+Maybe I should make a cljs backend for core.matrix that uses
+typed array buffers as the backing store?
 """
+
+;; add these annotations...
+(ann ^:no-check clojure.core/not-empty [Seqable -> Boolean])
+(ann ^:no-check clojure.math.numeric-tower/sqrt [Number -> Number])
 
 (ann-record Vector3 [x :- Number, y :- Number, z :- Number])
 (defrecord Vector3 [x y z])
@@ -68,9 +80,9 @@ Maybe I should make a cljs backend for core.matrix that uses typed array buffers
 
 (ann normalize [Vector3 -> Vector3])
 (defn normalize [v]
-  (let [magv (mag v)]
-    (if (not= magv 0)
-      (k*v (/ 1 magv) v)
+  (let [mag-v (mag v)]
+    (if (not= mag-v 0)
+      (k*v (/ 1 mag-v) v)
       (Vector3. 0 0 0))))
 
 (ann neg [Vector3 -> Vector3])
@@ -84,6 +96,8 @@ Maybe I should make a cljs backend for core.matrix that uses typed array buffers
 ;; I can define a union type for Vector3 and Point3...
 (ann-record Point3 [x :- Number, y :- Number, z :- Number])
 (defrecord Point3 [x y z])
+
+(def> origin :- Point3 (Point3. 0 0 0))
 
 ;; could I just reuse v+ with some core.typed cleverness?
 ;; make a union type, and have the function dispatch on the arg order...
@@ -100,7 +114,8 @@ Maybe I should make a cljs backend for core.matrix that uses typed array buffers
 (defn k*p [c {:keys [x y z]}]
   (Point3. (* c x) (* c y) (* c z)))
 
-;; now I am feeling the pain, should really be using multimethods to define addition
+;; now I am feeling the pain, should really be using multimethods
+; to define addition
 ;; maybe I should make a macro for commutative operations?
 
 ;; does origin make more sense than base?
@@ -135,7 +150,7 @@ Maybe I should make a cljs backend for core.matrix that uses typed array buffers
 
 ;; oh, could core/typed do (runtime?) bounds enforcing on numbers?
 ;; that'd be incredible
-(ann-record Color [r :- Number, g :- Number, b :- number])
+(ann-record Color [r :- Number, g :- Number, b :- Number])
 (defrecord Color [r g b])
 
 (ann-many Color
@@ -180,9 +195,13 @@ Maybe I should make a cljs backend for core.matrix that uses typed array buffers
 (defn col* [{:keys [r g b]} {r2 :r g2 :g b2 :b}]
   (Color. (* r r2) (* g g2) (* b b2)))
 
+(ann sum-colors [(ISeq Color) -> Color])
+(defn sum-colors [colors]
+  (reduce col+ black colors))
 
 ;; procedural textures are functions of points that emit materials
-(ann-record Material [color :- Color, reflectivity :- Number, diffuseness :- Number])
+(ann-record Material [color :- Color, reflectivity :- Number,
+                      diffuseness :- Number])
 (defrecord Material [color reflectivity diffuseness])
 
 (ann-many [Point3 -> Material]
@@ -210,23 +229,27 @@ Maybe I should make a cljs backend for core.matrix that uses typed array buffers
 
 ;; SHAPES
 
-(ann-record Intersection [normal :- Vector3, point :- Point3, ray :- Ray, material :- Material])
+(ann-record Intersection [normal :- Vector3, point :- Point3,
+                          ray :- Ray, material :- Material])
 (defrecord Intersection [normal point ray material])
 
 (def> epsilon :- Number 0.001)
 
 ;; this should really be a tuple...
-(def-alias TimeIntersectVec (IPersistentVector Time Intersection))
+(def-alias TimeIntersect '[Time Intersection])
+(def-alias NonEmptyTISeq (ISeq TimeIntersect))
+(def-alias TimeIntersectSeq (U '[] (ISeq TimeIntersect)))
 ;; a vector of TimeIntersectVecs... hope this isn't confusing...
 
 (ann-protocol Shape
-  intersect [Shape Ray -> (Seq TimeIntersectVec)])
+  intersect [Shape Ray -> TimeIntersectSeq])
 (defprotocol> Shape
   (intersect [shape ray]))
 
 (def-alias MaterialFn [Point3 -> Material])
 
-(ann-datatype Sphere [center :- Point3, radius :- Number, material-fn :- MaterialFn])
+(ann-datatype Sphere [center :- Point3, radius :- Number,
+                      material-fn :- MaterialFn])
 (deftype Sphere [center radius material-fn]
   Shape
   (intersect [this {:keys [base direction] :as ray}]
@@ -235,7 +258,9 @@ Maybe I should make a cljs backend for core.matrix that uses typed array buffers
           b (* 2 (dot direction center-vec))
           c (- (squared-mag center-vec)
                (* radius radius))
-          times (filter #(> % epsilon) (roots a b c))]
+          times (filter (ann-form #(> % epsilon)
+                                  [Number -> Boolean])
+                        (roots a b c))]
       ;; these should maybe be top-level functions?
       (letfn> [normal-at-time :- [Time -> Vector3]
                (normal-at-time [t]
@@ -245,20 +270,25 @@ Maybe I should make a cljs backend for core.matrix that uses typed array buffers
                intersection-at-time :- [Time -> Intersection]
                (intersection-at-time [t]
                  (let [pos (position-at-time ray t)]
-                  (Intersection. (normal-at-time t) pos ray (material-fn pos))))]
-             (map
-               #(identity [% (intersection-at-time %)])
+                  (Intersection. (normal-at-time t)
+                                 pos ray (material-fn pos))))]
+              (map
+               (ann-form #(identity [% (intersection-at-time %)])
+                         [Time -> TimeIntersect])
                times)))))
 
-;; Plane is defined by a normal (its a 2 sided plane though) and a distance.
+;; Plane is defined by a normal (its a 2 sided plane though) and a distance
 ;; The plane coincident with y=5 and normal (0,0,1) has distance -5.
-(ann-datatype Plane [normal :- Vector3, distance :- Number, material-fn :- MaterialFn])
+;; Htrace contained a non-sensical dot product between a point and a vector
+;; so I used the standard algebraic form t = ((p_0 - l_0) dot n)/(l dot n)
+(ann-datatype Plane [normal :- Vector3, distance :- Number,
+                     material-fn :- MaterialFn])
 (deftype Plane [normal distance material-fn]
   Shape
   (intersect [this {:keys [base direction] :as ray}]
-    (let [nnorm (normalize normal)
-          vd    (dot nnorm direction)
-          v0    (negate (+ (dot nnorm base) distance))]
+    (let [vd     (dot direction normal)
+          neg-p0 (k*p distance (p+v origin normal))
+          v0     (negate (dot (p+ base neg-p0) normal))]
       (if (= vd 0.0)
         []
         (let [t (/ v0 vd)
@@ -267,26 +297,34 @@ Maybe I should make a cljs backend for core.matrix that uses typed array buffers
             [t (Intersection.
                 (if (> vd 0) (neg normal) normal)
                 hit-point ray (material-fn hit-point))]
-            []))))))
+            '()))))))
 
-;; might this get an empty vector as the argument? In which case the result would be nil.
-(ann closest [(Seq TimeIntersectVec) -> Intersection])
-;; I guess we do this trickery with reduce to support select-nearest when xs is empty
+;; might this get an empty vector as the argument?
+;; In which case the result would be nil.
+(ann closest [TimeIntersectSeq -> Intersection])
+;; I guess we do this trickery with reduce to support select-nearest
+;; when xs is empty
 (defn closest [xs]
-  (letfn> [select-nearest :- [TimeIntersectVec TimeIntersectVec -> TimeIntersectVec]
+  (letfn> [select-nearest :- [TimeIntersect TimeIntersect ->
+                              TimeIntersect]
            (select-nearest [[t1 i1] [t2 i2]]
              (if (< t1 t2) [t1 i1] [t2 i2]))]
-    (second (reduce select-nearest xs))))
+    (second (reduce select-nearest
+                    (filter not-empty xs)))))
 
 ;; LIGHTS
 
 ;; does this capture the fact that the result may be empty?
-(ann combined-hits [ShapeVector Ray -> (Seq TimeIntersectVec)])
+(ann combined-hits [ShapeVector Ray -> TimeIntersectSeq])
 (defn combined-hits [shapes ray]
   (filter not-empty
-          (concat (map #(intersect % ray) shapes))))
+          (concat (map (ann-form #(intersect % ray)
+                                 [Shape -> TimeIntersectSeq])
+                       shapes))))
 
-(ann point-is-lit? [Point3 Point3 ShapeVec -> Boolean])
+;; something is TERRIBLY wrong: hits is returning color instead
+;; of intersect time vecs...
+(ann point-is-lit? [Point3 Point3 ShapeVector -> Boolean])
 (defn point-is-lit? [point light-pos shapes]
   "Helper to calculate the diffuse light at the surface normal, given
    the light direction (from light source to surface)"
@@ -309,23 +347,25 @@ Maybe I should make a cljs backend for core.matrix that uses typed array buffers
 ;; explicitly take shapes as an arg since we don't want globals littering
 ;; our program
 (ann-protocol Light
-  local-light [Light Shapes Intersection -> Color])
+  local-light [Light ShapeVector Intersection -> Color])
 (defprotocol> Light
   (local-light [light shapes intersection]))
 
-(ann-datatype Directional [direction :- Vector3, color :- Color])
+(ann-datatype Directional [direction :- Vector3, light-color :- Color])
 (deftype Directional [direction light-color]
   Light
   (local-light [light shapes {:keys [normal material] :as intersection}]
     (let [mixed-color (col* (:color material) light-color)
           diffuse     (k*col (* (diffuse-coeff direction normal)
                                 (:diffuseness material))
-                             mixed-color)])))
+                             mixed-color)]
+      diffuse)))
 
-(ann-datatype Spotlight [point :- Point3, color :- Color])
+(ann-datatype Spotlight [light-pos :- Point3, light-color :- Color])
 (deftype Spotlight [light-pos light-color]
   Light
-  (local-light [light shapes {:keys [normal point material] :as intersection}]
+  (local-light [light shapes {:keys [normal point material]
+                              :as intersection}]
     (let [mixed-color (col* (:color material) light-color)
           direction   (p+ point (k*p -1 light-pos))
           diffuse     (k*col (* (diffuse-coeff direction normal)
@@ -338,16 +378,19 @@ Maybe I should make a cljs backend for core.matrix that uses typed array buffers
 
 ;; REFLECTIONS: global lighting model
 
-(ann raytrace [Scene Int Ray -> Color])
+(ann raytrace [Scene AnyInteger Ray -> Color])
 (declare raytrace)
 
-(ann reflected-ray [Scene Integer Intersection -> Color])
-(defn reflected-ray [scene depth {:keys [normal point ray material] :as intersection}]
+(ann reflected-ray [Scene AnyInteger Intersection -> Color])
+(defn reflected-ray [scene depth {:keys [normal point ray material]
+                                  :as intersection}]
   (if (= (:reflectivity material) 0.0)
     black
-    (let [neg-in-dir (neg (:direction ray))
+    (let [in-dir (:direction ray)
+          neg-in-dir (neg in-dir)
           k (* 2 (dot (normalize normal) (normalize neg-in-dir)))
-          out-ray-dir (- (k*v k (normalize normal)) neg-in-dir)
+          ;; don't know why Htrace does double negative...
+          out-ray-dir (v+ (k*v k (normalize normal)) in-dir)
           reflected-col (raytrace scene
                                   (inc depth)
                                   (Ray. point out-ray-dir))]
@@ -372,8 +415,8 @@ Maybe I should make a cljs backend for core.matrix that uses typed array buffers
   (Scene.
    (View. (Point3. 0 0 -100) 100 (Point3. 0 0 100) (Vector3. 0 -1 0))
    [(Plane. (Vector3. 0 -1 0) 50 shiny-red)
-    (Sphere. (Vector3. 50 10 100) 40 semi-shiny-green)
-    (Sphere. (Vector3. -80 0 80) 50 checked-matt)]
+    (Sphere. (Point3. 50 10 100) 40 semi-shiny-green)
+    (Sphere. (Point3. -80 0 80) 50 checked-matt)]
    black
    (Color. 0.1 0.1 0.1)
    [(Spotlight. (Point3. 100 -30 0) nearly-white)
@@ -385,9 +428,14 @@ Maybe I should make a cljs backend for core.matrix that uses typed array buffers
 (ann pixel-grid [View Number Number -> (IPersistentVector Point3)])
 (defn pixel-grid [{:keys [camera-pos view-dist looking-at view-up]}
                   width height]
-  (let [grid (for [x (range width) y (range height)] (Point3. x y 0.0))
+  (let [grid (for> :- Point3
+                   [x :- Number (range width)
+                    y :- Number (range height)]
+                   (Point3. x y 0.0))
         center-offset (Vector3. (* -0.5 width) (* -0.5 height) 0)
-        pixel-offsets (map #(p+v % center-offset) grid)
+        pixel-offsets (map (ann-form #(p+v % center-offset)
+                                     [Point3 -> Point3])
+                           grid)
         ;; view dir should be a vector!
         view-dir (normalize (p+ looking-at (k*p -1 camera-pos)))
         screen-center (p+v camera-pos (k*v view-dist view-dir))
@@ -416,45 +464,51 @@ Maybe I should make a cljs backend for core.matrix that uses typed array buffers
 
 ;; MAIN RENDERING FUNCTIONS
 
-(def> max-bounce-depth :- Int 2)
+(def> max-bounce-depth :- Integer 2)
 
 ;; my version explicitly takes the scene as an arg
 ;; boo for global variables...
 ;; maybe we should take the desired max bounces as an arg...
-(ann overall-lighting [Scene Int Intersection -> Color])
-(defn overall-lighting [{:keys [lights ambient-light shapes] :as scene} depth hit]
-  "Calculate the overall color of a ray/shape intersection, taking into account
-  local lighting (diffuse only) and global lighting (reflections only, to a depth
-  of 2 bounces)"
-  (letfn [(sum-colors [colors] (reduce col+ black colors))]
-    (let [local-lighting (col+ ambient-light
-                               (sum-colors
-                                (map #(local-light % shapes hit) lights)))
-          global-lighting (if (< depth max-bounce-depth)
-                            (reflected-ray scene depth hit)
-                            black)]
-      (clamp (col+ local-lighting global-lighting)))))
+(ann overall-lighting [Scene AnyInteger Intersection -> Color])
+(defn overall-lighting [{:keys [lights ambient-light shapes] :as scene}
+                        depth hit]
+  "Calculate the overall color of a ray/shape intersection,
+   taking into account local lighting (diffuse only) and
+   global lighting (reflections only, to depth bounces)"
+  (let [local-lighting (col+ ambient-light
+                             (sum-colors
+                              (map (ann-form #(local-light % shapes hit)
+                                             [Light -> Color])
+                                   lights)))
+        global-lighting (if (< depth max-bounce-depth)
+                          (reflected-ray scene depth hit)
+                          black)]
+    (clamp (col+ local-lighting global-lighting))))
 
 ;; explicitly takes the scene as an argument instead of using global vars
-;; (ann raytrace [Scene Int Ray -> Color])
+;; (ann raytrace [Scene Integer Ray -> Color])
 (defn raytrace [{:keys [shapes background-color] :as scene} depth ray]
   (let [hits (combined-hits shapes ray)]
     (if (empty? hits)
       background-color
       (overall-lighting scene depth (closest hits)))))
 
-;; I separated render from render-to-pgm since I want to have multiple output targets
+;; I separated render from render-to-pgm since I want to have
+;; multiple output targets
 ;; (e.g. the html canvas element)
-;; explicitly take a scene as an argument... (contains view, shapes, and lighting...)
-(ann render [Scene Number Number -> (IPersistentVector Color)])
-(defn render [{:keys [view shapes background-color ambient-light lights] :as scene}
+;; explicitly take a scene as an argument...
+;; (contains view, shapes, and lighting...)
+(ann render [Scene Number Number -> (Seqable Color)])
+(defn render [{:keys [view shapes background-color ambient-light lights]
+               :as scene}
               width height]
-  (letfn> [projection :- [View Point3 -> Ray]
+  (letfn> [projection :- [Point3 -> Ray]
            (projection [point] (perspective-projection view point))]
     (let [ray-collection (map projection (pixel-grid view width height))
           color-collection (map (partial raytrace scene 0) ray-collection)]
       color-collection)))
 
+(ann -main [-> Any])
 (defn -main []
   (render default-scene 500 500))
 
