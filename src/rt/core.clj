@@ -73,11 +73,11 @@ typed array buffers as the backing store?
 (ann cross [Vector3 Vector3 -> Vector3])
 (defn cross [{:keys [x y z]} {a :x b :y c :z}]
   (Vector3. (- (* y c)
-            (* z b))
-         (- (* z a)
-            (* x c))
-         (- (* x b)
-            (* y a))))
+               (* z b))
+            (- (* z a)
+               (* x c))
+            (- (* x b)
+               (* y a))))
 
 (ann normalize [Vector3 -> Vector3])
 (defn normalize [v]
@@ -412,7 +412,7 @@ typed array buffers as the backing store?
 
 (def> default-scene :- Scene
   (Scene.
-   (View. (Point3. 0 0 -100) 100 (Point3. 0 0 100) (Vector3. 0 -1 0))
+   (View. (Point3. 0 0 -100) 100 (Point3. 0 0 100) (Vector3. 0 1 0))
    [(Plane. (Vector3. 0 -1 0) 50 shiny-red)
     (Sphere. (Point3. 50 10 100) 40 semi-shiny-green)
     (Sphere. (Point3. -80 0 80) 50 checked-matt)]
@@ -421,9 +421,6 @@ typed array buffers as the backing store?
    [(Spotlight. (Point3. 100 -30 0) nearly-white)
     (Spotlight. (Point3. -100 -100 150) nearly-white)]))
 
-;; why do they have x and y flipped in Htrace?
-;; this fn seems like a hack: should probably just do matrix math?
-;; incomplete...
 (ann pixel-grid [View Number Number -> (Seqable Point3)])
 (defn pixel-grid [{:keys [camera-pos view-dist looking-at view-up]}
                   width height]
@@ -435,14 +432,13 @@ typed array buffers as the backing store?
         pixel-offsets (map (ann-form #(p+v % center-offset)
                                      [Point3 -> Point3])
                            grid)
-        ;; view dir should be a vector!
         view-dir (normalize (p+ looking-at (k*p -1 camera-pos)))
         screen-center (p+v camera-pos (k*v view-dist view-dir))
-        view-right (cross view-dir view-up)]
+        view-right (cross view-up view-dir)]
         (letfn> [transform :- [Point3 -> Point3]
                 (transform [{:keys [x y]}]
                   (p+v (p+v screen-center (k*v x view-right))
-                       (k*v y (neg view-up))))]
+                       (k*v y view-up)))]
           (map transform pixel-offsets))))
 ;; direly need to test
 
