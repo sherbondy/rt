@@ -507,22 +507,24 @@ typed array buffers as the backing store?
           color-collection (map (partial raytrace scene 0) ray-collection)]
       color-collection)))
 
-(ann pgm-color [Color -> String])
-(defn pgm-color [{:keys [r g b] :as color}]
+(ann ppm-color [Color -> String])
+(defn ppm-color [{:keys [r g b] :as color}]
   (str (math/round (* r 255)) " "
        (math/round (* g 255)) " "
        (math/round (* b 255)) " "))
 
-(ann make-pgm [Integer Integer (Seqable Color) -> String])
-(defn make-pgm [width height pixel-colors]
+(ann make-ppm [Integer Integer (Seqable Color) -> String])
+(defn make-ppm [width height pixel-colors]
   (str "P3\n" width " " height "\n255\n"
-       (for> :- String
-             [pixel :- Color pixel-colors]
-         (pgm-color pixel))))
+       (apply str
+         (for> :- String
+               [pixel :- Color pixel-colors]
+           (ppm-color pixel)))))
 
 (ann -main [-> Any])
 (defn -main []
-  (make-pgm 500 500
-            (render default-scene 500 500)))
+  (spit "test.ppm"
+    (make-pgm 500 500
+              (render default-scene 500 500))))
 
 (-main)
