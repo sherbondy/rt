@@ -237,8 +237,7 @@ typed array buffers as the backing store?
 
 ;; this should really be a tuple...
 (def-alias TimeIntersect '[Time Intersection])
-(def-alias NonEmptyTISeq (ISeq TimeIntersect))
-(def-alias TimeIntersectSeq (U '[] (ISeq TimeIntersect)))
+(def-alias TimeIntersectSeq (Seqable TimeIntersect))
 ;; a vector of TimeIntersectVecs... hope this isn't confusing...
 
 (ann-protocol Shape
