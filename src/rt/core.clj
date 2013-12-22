@@ -6,7 +6,7 @@
                      for> letfn>
                      AnyInteger]]
             [clojure.math.numeric-tower :as math])
-  (:import [clojure.lang IPersistentVector ISeq Seqable]))
+  (:import [clojure.lang IPersistentVector Seqable]))
 
 """
 This is a ray tracer written in Clojure/Script.
@@ -195,7 +195,7 @@ typed array buffers as the backing store?
 (defn col* [{:keys [r g b]} {r2 :r g2 :g b2 :b}]
   (Color. (* r r2) (* g g2) (* b b2)))
 
-(ann sum-colors [(ISeq Color) -> Color])
+(ann sum-colors [(Seqable Color) -> Color])
 (defn sum-colors [colors]
   (reduce col+ black colors))
 
@@ -308,8 +308,7 @@ typed array buffers as the backing store?
                               TimeIntersect]
            (select-nearest [[t1 i1] [t2 i2]]
              (if (< t1 t2) [t1 i1] [t2 i2]))]
-    (second (reduce select-nearest
-                    (filter not-empty xs)))))
+    (second (reduce select-nearest xs))))
 
 ;; LIGHTS
 
@@ -424,7 +423,7 @@ typed array buffers as the backing store?
 ;; why do they have x and y flipped in Htrace?
 ;; this fn seems like a hack: should probably just do matrix math?
 ;; incomplete...
-(ann pixel-grid [View Number Number -> (IPersistentVector Point3)])
+(ann pixel-grid [View Number Number -> (Seqable Point3)])
 (defn pixel-grid [{:keys [camera-pos view-dist looking-at view-up]}
                   width height]
   (let [grid (for> :- Point3
