@@ -3,6 +3,19 @@
   :dependencies [[org.clojure/clojure "1.5.1"]
                  [org.clojure/core.typed "0.2.19"]
                  [org.clojure/math.numeric-tower "0.0.2"]]
+  :plugins [[com.keminglabs/cljx "0.3.1"]]
+  :hooks [cljx.hooks]
+
+  :source-paths ["target/generated/src/clj" "src/clj"]
+
   :core.typed {:check
                [rt.core]}
-  :main rt.core)
+
+  :cljx {:builds [{:source-paths ["src/cljx"]
+                   :output-path "target/generated/src/clj"
+                   :rules :clj}
+                  {:source-paths ["src/cljx"]
+                   :output-path "target/generated/src/cljs"
+                   :rules :cljs}]}
+  ;; also need to port tests to cljx...
+  :main rt.main)

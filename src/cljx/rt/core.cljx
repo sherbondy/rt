@@ -203,6 +203,12 @@ typed array buffers as the backing store?
 (defn sum-colors [colors]
   (reduce col+ black colors))
 
+(ann col->vec255 [Color -> (IPersistentVector Integer)])
+(defn col->vec255 [{:keys [r g b] :as color}]
+  [(math/round (* r 255))
+   (math/round (* g 255))
+   (math/round (* b 255))])
+
 ;; procedural textures are functions of points that emit materials
 (ann-record Material [color :- Color, reflectivity :- Number,
                       diffuseness :- Number])
@@ -502,10 +508,10 @@ typed array buffers as the backing store?
       color-collection)))
 
 (ann ppm-color [Color -> String])
-(defn ppm-color [{:keys [r g b] :as color}]
-  (str (math/round (* r 255)) " "
-       (math/round (* g 255)) " "
-       (math/round (* b 255)) " "))
+(defn ppm-color [color]
+  (apply str
+         (-> (vec (interpose " " (col->vec255 color)))
+             (conj " "))))
 
 (ann make-ppm [Integer Integer (Seqable Color) -> String])
 (defn make-ppm [width height pixel-colors]
@@ -514,11 +520,3 @@ typed array buffers as the backing store?
          (for> :- String
                [pixel :- Color pixel-colors]
            (ppm-color pixel)))))
-
-(ann -main [ -> nil])
-(defn -main []
-  (spit "test.ppm"
-    (make-ppm 100 100
-              (render default-scene 100 100))))
-
-;;(-main)
