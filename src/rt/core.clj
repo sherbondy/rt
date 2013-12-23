@@ -317,6 +317,7 @@ typed array buffers as the backing store?
 
 ;; does this capture the fact that the result may be empty?
 ;; this is broken!
+;; need to express that the result is either empty or true TimeIntersects...
 (ann combined-hits [ShapeVector Ray -> TimeIntersectSeq])
 (defn combined-hits [shapes ray]
   (filter not-empty
@@ -337,6 +338,7 @@ typed array buffers as the backing store?
         times (map first hits)]
     (if (empty? times)
       true
+      ;; make sure the intersection isn't *behind* the light
       (> (apply min times) time-at-light))))
 
 (ann diffuse-coeff [Vector3 Vector3 -> Number])
