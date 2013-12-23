@@ -5,6 +5,7 @@
                      def-alias def> defprotocol>
                      for> letfn>
                      AnyInteger
+                     NonEmptySeqable
                      check-ns]]
             [clojure.math.numeric-tower :as math])
   (:import [clojure.lang IPersistentVector Seqable]))
@@ -241,6 +242,7 @@ typed array buffers as the backing store?
 ;; this should really be a tuple... maybe use clj-tuple?
 (def-alias TimeIntersect '[Time Intersection])
 (def-alias TimeIntersectSeq (Seqable TimeIntersect))
+(def-alias NonEmptyTISeq (NonEmptySeqable TimeIntersect))
 ;; a seq of TimeIntersect vectors... hope this isn't too confusing...
 
 (ann-protocol Shape
@@ -301,7 +303,8 @@ typed array buffers as the backing store?
                   hit-point ray (material-fn hit-point))]]
             []))))))
 
-(ann closest [TimeIntersectSeq -> Intersection])
+;; the input must be non-empty!
+(ann closest [NonEmptyTISeq -> Intersection])
 (defn closest [xs]
   (letfn> [select-nearest :- [TimeIntersect TimeIntersect ->
                               TimeIntersect]
