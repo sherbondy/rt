@@ -518,7 +518,7 @@ typed array buffers as the backing store?
 (ann -main [ -> nil])
 (defn -main []
   (spit "test.ppm"
-    (make-ppm 500 500
-              (render default-scene 500 500))))
+    (make-ppm 100 100
+              (render default-scene 100 100))))
 
 ;;(-main)
