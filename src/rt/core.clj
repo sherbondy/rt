@@ -94,17 +94,17 @@ typed array buffers as the backing store?
 
 ;; how do I define an alias for a record?
 ;; wish I could just do:
-;;(defalias Point3 Vector3), or something along those lines...
-;;(Point3. 1 2 3)
-;; I can define a union type for Vector3 and Point3...
+;; (defalias Point3 Vector3), or something along those lines...
+;; although it is actually nice to distinguish the two
 (ann-record Point3 [x :- Number, y :- Number, z :- Number])
 (defrecord Point3 [x y z])
 
 (def> origin :- Point3 (Point3. 0 0 0))
 
 ;; could I just reuse v+ with some core.typed cleverness?
-;; make a union type, and have the function dispatch on the arg order...
-;; really seems like I should implement + as a multimethod
+;; intersection type?
+;; have the function dispatch on the arg order...
+;; or implement + as a multimethod... (as in algo generic)
 (ann p+ [Point3 Point3 -> Vector3])
 (defn p+ [{:keys [x y z]} {a :x b :y c :z}]
   (Vector3. (+ x a) (+ y b) (+ z c)))
@@ -117,8 +117,8 @@ typed array buffers as the backing store?
 (defn k*p [c {:keys [x y z]}]
   (Point3. (* c x) (* c y) (* c z)))
 
-;; now I am feeling the pain, should really be using multimethods
-; to define addition
+;; now I am feeling the pain, should I be using multimethods
+;; to define addition?
 ;; maybe I should make a macro for commutative operations?
 
 ;; does origin make more sense than base?
@@ -238,10 +238,10 @@ typed array buffers as the backing store?
 
 (def> epsilon :- Number 0.001)
 
-;; this should really be a tuple...
+;; this should really be a tuple... maybe use clj-tuple?
 (def-alias TimeIntersect '[Time Intersection])
 (def-alias TimeIntersectSeq (Seqable TimeIntersect))
-;; a vector of TimeIntersectVecs... hope this isn't confusing...
+;; a seq of TimeIntersect vectors... hope this isn't too confusing...
 
 (ann-protocol Shape
   intersect [Shape Ray -> TimeIntersectSeq])
@@ -301,11 +301,7 @@ typed array buffers as the backing store?
                   hit-point ray (material-fn hit-point))]]
             []))))))
 
-;; might this get an empty vector as the argument?
-;; In which case the result would be nil.
 (ann closest [TimeIntersectSeq -> Intersection])
-;; I guess we do this trickery with reduce to support select-nearest
-;; when xs is empty
 (defn closest [xs]
   (letfn> [select-nearest :- [TimeIntersect TimeIntersect ->
                               TimeIntersect]
@@ -315,9 +311,6 @@ typed array buffers as the backing store?
 
 ;; LIGHTS
 
-;; does this capture the fact that the result may be empty?
-;; this is broken!
-;; need to express that the result is either empty or true TimeIntersects...
 (ann combined-hits [ShapeVector Ray -> TimeIntersectSeq])
 (defn combined-hits [shapes ray]
   (filter not-empty
@@ -325,8 +318,6 @@ typed array buffers as the backing store?
                                  [Shape -> TimeIntersectSeq])
                          shapes))))
 
-;; something is TERRIBLY wrong: hits is returning color instead
-;; of intersect time vecs...
 (ann point-is-lit? [Point3 Point3 ShapeVector -> Boolean])
 (defn point-is-lit? [point light-pos shapes]
   "Helper to calculate the diffuse light at the surface normal, given
