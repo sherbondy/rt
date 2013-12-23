@@ -4,7 +4,8 @@
                      ann-protocol ann-record
                      def-alias def> defprotocol>
                      for> letfn>
-                     AnyInteger]]
+                     AnyInteger
+                     check-ns]]
             [clojure.math.numeric-tower :as math])
   (:import [clojure.lang IPersistentVector Seqable]))
 
@@ -34,6 +35,7 @@ typed array buffers as the backing store?
 
 ;; add these annotations...
 (ann ^:no-check clojure.core/not-empty [Seqable -> Boolean])
+(ann ^:no-check clojure.core/spit [String String -> nil])
 (ann ^:no-check clojure.math.numeric-tower/sqrt [Number -> Number])
 (ann ^:no-check clojure.math.numeric-tower/round [Number -> Integer])
 
@@ -517,10 +519,10 @@ typed array buffers as the backing store?
                [pixel :- Color pixel-colors]
            (ppm-color pixel)))))
 
-(ann -main [-> Any])
+(ann -main [ -> nil])
 (defn -main []
   (spit "test.ppm"
-    (make-ppm 100 100
-              (render default-scene 100 100))))
+    (make-ppm 500 500
+              (render default-scene 500 500))))
 
-(-main)
+;;(-main)
