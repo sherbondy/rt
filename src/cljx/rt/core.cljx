@@ -36,6 +36,8 @@ Maybe I should make a cljs backend for core.matrix that uses
 typed array buffers as the backing store?
 """
 
+;; maybe use ztellman's primitive-math library for .clj
+
 ;; add these annotations...
 #+clj(ann ^:no-check clojure.core/not-empty
           (All [x] [(U nil (Seqable x)) -> (U nil (NonEmptySeqable x))]))
@@ -271,7 +273,7 @@ typed array buffers as the backing store?
 (defn above-error? [n]
   (> n epsilon))
 
-#+clj(ann sphere-time-intersect-fn [Ray Point3 Time MaterialFn -> (Fn [Time -> TimeIntersect])])
+#+clj(ann sphere-time-intersect-fn [Ray Point3 MaterialFn -> (Fn [Time -> TimeIntersect])])
 (defn sphere-time-intersect-fn [ray center material-fn]
   (fn [time]
     (let [pos    (position-at-time ray time)
@@ -438,12 +440,13 @@ typed array buffers as the backing store?
    [(Spotlight. (Point3. 100 -30 0) nearly-white)
     (Spotlight. (Point3. -100 -100 150) nearly-white)]))
 
-#+clj(ann transform-point [Point3 Point3 Vector3 Vector3 -> Point3])
+#+clj(ann transform-point [Point3 Vector3 Vector3 Point3 -> Point3])
 (defn transform-point [screen-center view-right view-up
                        {:keys [x y] :as point}]
   (p+v (p+v screen-center (k*v x view-right))
        (k*v y view-up)))
 
+;; this is exactly the sort of thing that matrix operations shine at.
 #+clj(ann pixel-grid [View Number Number -> (Seqable Point3)])
 (defn pixel-grid [{:keys [camera-pos view-dist looking-at view-up]}
                   width height]

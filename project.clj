@@ -4,7 +4,7 @@
                  [org.clojure/core.typed "0.2.19"]
                  [org.clojure/math.numeric-tower "0.0.2"]
                  ;; light table only supports up to 2030 for now... :(
-                 [org.clojure/clojurescript "0.0-2030"]
+                 ;;[org.clojure/clojurescript "0.0-2030"]
                  [prismatic/dommy "0.1.1"]]
 
   :plugins [[com.keminglabs/cljx "0.3.1"]
