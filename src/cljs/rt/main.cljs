@@ -10,6 +10,9 @@
 
 (def canvas (sel1 :#canvas))
 
+;; maybe it would be better to make out data Uint8ClampedArray in one go
+;; instead of calling a function for each pixel. Could also ditch the
+;; intermediate vector step.
 (defn set-pixel! [image-data x y [r g b]]
   (let [width (.-width image-data)
         index (* (+ x (* y width)) 4)]
