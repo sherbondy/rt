@@ -1,4 +1,5 @@
 .lein*
 .nrepl-port
 target/
+out/
 *.swp
