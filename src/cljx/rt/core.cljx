@@ -5,6 +5,7 @@
                           def-alias def> defprotocol>
                           for> letfn>
                           AnyInteger
+                          NonEmptySeq
                           NonEmptySeqable
                           check-ns]]
                  [clojure.math.numeric-tower :as math])
@@ -36,7 +37,8 @@ typed array buffers as the backing store?
 """
 
 ;; add these annotations...
-#+clj(ann ^:no-check clojure.core/not-empty [Seqable -> Boolean])
+#+clj(ann ^:no-check clojure.core/not-empty
+          (All [x] [(U nil (Seqable x)) -> (U nil (NonEmptySeqable x))]))
 #+clj(ann ^:no-check clojure.core/spit [String String -> nil])
 #+clj(ann ^:no-check clojure.math.numeric-tower/sqrt [Number -> Number])
 #+clj(ann ^:no-check clojure.math.numeric-tower/round [Number -> Integer])
@@ -253,7 +255,7 @@ typed array buffers as the backing store?
 ;; this should really be a tuple... maybe use clj-tuple?
 #+clj(def-alias TimeIntersect '[Time Intersection])
 #+clj(def-alias TimeIntersectSeq (Seqable TimeIntersect))
-#+clj(def-alias NonEmptyTISeq (NonEmptySeqable TimeIntersect))
+#+clj(def-alias NonEmptyTISeq (NonEmptySeq TimeIntersect))
 ;; a seq of TimeIntersect vectors... hope this isn't too confusing...
 
 #+clj(ann-protocol Shape
@@ -348,7 +350,8 @@ typed array buffers as the backing store?
     (if (empty? times)
       true
       ;; make sure the intersection isn't *behind* the light
-      (> (apply min times) time-at-light))))
+      (> (apply min (first times) (rest times))
+         time-at-light))))
 
 #+clj(ann diffuse-coeff [Vector3 Vector3 -> Number])
 (defn diffuse-coeff [light-dir normal]
@@ -510,14 +513,15 @@ typed array buffers as the backing store?
   (let [hits (combined-hits shapes ray)]
     (if (empty? hits)
       background-color
-      (overall-lighting scene depth (closest hits)))))
+      (overall-lighting scene depth (closest (seq hits))))))
 
 ;; I separated render from render-to-pgm since I want to have
 ;; multiple output targets
 ;; (e.g. the html canvas element)
 ;; explicitly take a scene as an argument...
 ;; (contains view, shapes, and lighting...)
-#+clj(ann render [Scene Number Number -> (Seqable Color)])
+;; we deliberately force the output to be a vec to get O(1) indexing
+#+clj(ann render [Scene Number Number -> (IPersistentVector Color)])
 (defn render [{:keys [view shapes background-color ambient-light lights]
                :as scene}
               width height]
@@ -525,7 +529,7 @@ typed array buffers as the backing store?
                               (pixel-grid view width height))
         color-collection (map (partial raytrace scene 0)
                               ray-collection)]
-    color-collection))
+    (vec color-collection)))
 
 #+clj(ann ppm-color [Color -> String])
 (defn ppm-color [color]
