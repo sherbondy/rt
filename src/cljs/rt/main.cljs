@@ -24,14 +24,11 @@
         height (.-height canvas)
         image-data (.createImageData ctx width height)
         rendering  (render scene width height)]
-    (println "dims: " width " " height)
     (doseq [y (range height)
             x (range width)]
       (let [pixel (nth rendering (+ x (* y width)))
             color (col->vec255 pixel)]
         (set-pixel! image-data x y color)))
-    (.log js/console (aget (.-data image-data) 1000))
-    (.putImageData ctx image-data 0 0)
-    (println "done!")))
+    (.putImageData ctx image-data 0 0)))
 
 (render-to-canvas canvas default-scene)
