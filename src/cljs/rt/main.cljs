@@ -21,6 +21,9 @@
     (aset (.-data image-data) (+ index 2) b)
     (aset (.-data image-data) (+ index 3) 255)))
 
+;; instead of using the render function directly, I should render
+;; each pixel individually. Then the user can see the progress!
+
 (defn render-to-canvas [canvas scene]
   (let [ctx    (.getContext canvas "2d")
         width  (.-width canvas)

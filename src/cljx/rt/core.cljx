@@ -9,8 +9,10 @@
                           NonEmptySeqable
                           check-ns]]
                  [clojure.math.numeric-tower :as math])
-  #+cljs(:require [rt.math :as math])
-  #+clj(:import [clojure.lang IPersistentVector Seqable]))
+  #+clj(:import  [clojure.lang IPersistentVector Seqable])
+
+  #+cljs(:require [rt.math :as math]))
+
 
 """
 This is a ray tracer written in Clojure/Script.
@@ -115,6 +117,10 @@ typed array buffers as the backing store?
 #+clj(ann p+ [Point3 Point3 -> Vector3])
 (defn p+ [{:keys [x y z]} {a :x b :y c :z}]
   (Vector3. (+ x a) (+ y b) (+ z c)))
+
+#+clj(ann p- [Point3 Point3 -> Vector3])
+(defn p- [{:keys [x y z]} {a :x b :y c :z}]
+  (Vector3. (- x a) (- y b) (- z c)))
 
 #+clj(ann p+v [Point3 Vector3 -> Point3])
 (defn p+v [{:keys [x y z]} {a :x b :y c :z}]
@@ -277,7 +283,7 @@ typed array buffers as the backing store?
 (defn sphere-time-intersect-fn [ray center material-fn]
   (fn [time]
     (let [pos    (position-at-time ray time)
-          normal (p+ pos (k*p -1 center))]
+          normal (p- pos center)]
       [time
        (Intersection. normal pos ray (material-fn pos))])))
 
@@ -287,7 +293,7 @@ typed array buffers as the backing store?
   Shape
   (intersect [this {:keys [base direction] :as ray}]
     (let [a (squared-mag direction)
-          center-vec (p+ base (k*p -1 center))
+          center-vec (p- base center)
           b (* 2 (dot direction center-vec))
           c (- (squared-mag center-vec)
                (* radius radius))
@@ -344,7 +350,7 @@ typed array buffers as the backing store?
 (defn point-is-lit? [point light-pos shapes]
   "Helper to calculate the diffuse light at the surface normal, given
    the light direction (from light source to surface)"
-  (let [path (p+ light-pos (k*p -1 point))
+  (let [path (p- light-pos point)
         time-at-light (mag path)
         ray (Ray. point (normalize path))
         hits (combined-hits shapes ray)
@@ -384,7 +390,7 @@ typed array buffers as the backing store?
   (local-light [light shapes {:keys [normal point material]
                               :as intersection}]
     (let [mixed-color (col* (:color material) light-color)
-          direction   (p+ point (k*p -1 light-pos))
+          direction   (p- point light-pos)
           diffuse     (k*col (* (diffuse-coeff direction normal)
                                 (:diffuseness material))
                              mixed-color)]
@@ -405,9 +411,11 @@ typed array buffers as the backing store?
     black
     (let [in-dir (:direction ray)
           neg-in-dir (neg in-dir)
-          k (* 2 (dot (normalize normal) (normalize neg-in-dir)))
+          k (* 2 (dot (normalize normal)
+                      (normalize neg-in-dir)))
           ;; don't know why Htrace does double negative...
-          out-ray-dir (v+ (k*v k (normalize normal)) in-dir)
+          out-ray-dir (v+ (k*v k (normalize normal))
+                          in-dir)
           reflected-col (raytrace scene
                                   (inc depth)
                                   (Ray. point out-ray-dir))]
@@ -446,16 +454,21 @@ typed array buffers as the backing store?
   (p+v (p+v screen-center (k*v x view-right))
        (k*v y view-up)))
 
+#+clj(ann empty-pixel-grid [Integer Integer -> (Seqable Point3)])
+(defn empty-pixel-grid [width height]
+  #+clj(for> :- Point3
+             [y :- Number (range height)
+              x :- Number (range width)]
+             (Point3. x y 0.0))
+  #+cljs(for [y (range height)
+              x (range width)]
+          (Point3. x y 0.0)))
+
 ;; this is exactly the sort of thing that matrix operations shine at.
 #+clj(ann pixel-grid [View Number Number -> (Seqable Point3)])
 (defn pixel-grid [{:keys [camera-pos view-dist looking-at view-up]}
                   width height]
-  (let [grid #+clj(for> :- Point3
-                    [y :- Number (range height)
-                     x :- Number (range width)]
-                    (Point3. x y 0.0))
-             #+cljs(for [y (range height) x (range width)]
-                     (Point3. x y 0.0))
+  (let [grid          (empty-pixel-grid width height)
 
         center-offset (Vector3. (* -0.5 width) (* -0.5 height) 0)
         pixel-offsets (map #+clj(ann-form #(p+v % center-offset)
@@ -463,7 +476,7 @@ typed array buffers as the backing store?
                            #+cljs #(p+v % center-offset)
                            grid)
 
-        view-dir      (normalize (p+ looking-at (k*p -1 camera-pos)))
+        view-dir      (normalize (p- looking-at camera-pos))
         screen-center (p+v camera-pos (k*v view-dist view-dir))
         view-right    (cross view-up view-dir)]
           (map (partial transform-point screen-center view-right view-up)
@@ -476,19 +489,31 @@ typed array buffers as the backing store?
 #+clj(ann parallel-projection [View Point3 -> Ray])
 (defn parallel-projection [{:keys [camera-pos looking-at]} point]
   "Create rays parallel to viewing screen (orthographic)"
-  (Ray. point (normalize (p+ looking-at (k*p -1 camera-pos)))))
+  (Ray. point
+        (normalize (p- looking-at camera-pos))))
 
 #+clj(ann perspective-projection [View Point3 -> Ray])
 (defn perspective-projection [{:keys [camera-pos]} point]
   "Perspective projection which creates rays through
   (0,0,-distance) through the point"
-  (Ray. point (normalize (p+ point (k*p -1 camera-pos)))))
+  (Ray. point
+        (normalize (p- point camera-pos))))
 
 
 ;; MAIN RENDERING FUNCTIONS
 
 #+clj(def> max-bounce-depth :- Integer 2)
 #+cljs(def max-bounce-depth 2)
+
+#+clj(ann total-local-lighting [Intersection ShapeVector Color LightVector -> Color])
+(defn total-local-lighting [hit shapes ambient-light lights]
+  (col+ ambient-light
+        (sum-colors
+          (map
+             #+clj(ann-form #(local-light % shapes hit)
+                            [Light -> Color])
+             #+cljs#(local-light % shapes hit)
+             lights))))
 
 ;; my version explicitly takes the scene as an arg
 ;; boo for global variables...
@@ -499,12 +524,7 @@ typed array buffers as the backing store?
   "Calculate the overall color of a ray/shape intersection,
    taking into account local lighting (diffuse only) and
    global lighting (reflections only, to depth bounces)"
-  (let [local-lighting (col+ ambient-light
-                             (sum-colors
-                              (map #+clj(ann-form #(local-light % shapes hit)
-                                             [Light -> Color])
-                                   #+cljs #(local-light % shapes hit)
-                                   lights)))
+  (let [local-lighting  (total-local-lighting hit shapes ambient-light lights)
         global-lighting (if (< depth max-bounce-depth)
                           (reflected-ray scene depth hit)
                           black)]
@@ -525,8 +545,7 @@ typed array buffers as the backing store?
 ;; (contains view, shapes, and lighting...)
 ;; we deliberately force the output to be a vec to get O(1) indexing
 #+clj(ann render [Scene Number Number -> (IPersistentVector Color)])
-(defn render [{:keys [view shapes background-color ambient-light lights]
-               :as scene}
+(defn render [{:keys [view] :as scene}
               width height]
   (let [ray-collection   (map (partial perspective-projection view)
                               (pixel-grid view width height))
