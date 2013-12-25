@@ -95,7 +95,8 @@ typed array buffers as the backing store?
 (defprotocol> ScalarMult
   (*k [this k]))
 
-;; why can't I access x y and z in extend-type?
+;; why can't I access x y and z directly in extend-type?
+;; this seems like a flaw in the clj language/compiler...
 (extend-type Vector3
   AddPoint3
   (+p [v p] (Point3.  (+ (.-x v) (.-x p))
@@ -511,10 +512,12 @@ typed array buffers as the backing store?
    [(Spotlight. (Point3. 100 -30 0) nearly-white)
     (Spotlight. (Point3. -100 -100 150) nearly-white)]))
 
-(ann transform-point [Point3 Vector3 Vector3 Point3 -> Point3])
-(defn transform-point [screen-center view-right view-up point]
-  (+v (+v screen-center (*k view-right (.-x point)))
-       (*k view-up (.-y point))))
+(ann transform-point [Point3 Vector3 Vector3 Vector3 Point3 -> Point3])
+(defn transform-point [screen-center center-offset view-right view-up point]
+  (let [offset-point (+v point center-offset)]
+    (+v (+v screen-center
+            (*k view-right (.-x offset-point)))
+         (*k view-up (.-y offset-point)))))
 
 (ann empty-pixel-grid [Integer Integer -> (Seqable Point3)])
 (defn empty-pixel-grid [width height]
@@ -531,18 +534,13 @@ typed array buffers as the backing store?
 (defn pixel-grid [{:keys [camera-pos view-dist looking-at view-up]}
                   width height]
   (let [grid          (empty-pixel-grid width height)
-
         center-offset (Vector3. (* -0.5 width) (* -0.5 height) 0)
-        pixel-offsets (map (ann-form
-                            #(+v % center-offset)
-                            [Point3 -> Point3])
-                           grid)
-
         view-dir      (normalize (-p looking-at camera-pos))
         screen-center (+v camera-pos (*k view-dir view-dist))
         view-right    (cross view-up view-dir)]
-          (map (partial transform-point screen-center view-right view-up)
-               pixel-offsets)))
+          (map (partial transform-point screen-center center-offset
+                        view-right view-up)
+               grid)))
 ;; direly need to test
 
 ;; it is beautiful how add is implicitly defined for compound types
