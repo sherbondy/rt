@@ -14,15 +14,15 @@
 
 (deftest vector-addition
   (let [sum (Vector3. 101 202 303)]
-    (is (= (v+ v1 v2) sum))))
+    (is (= (+v v1 v2) sum))))
 
 (deftest vector-subtraction
   (let [diff (Vector3. 99 198 297)]
-    (is (= (v- v2 v1) diff))))
+    (is (= (-v v2 v1) diff))))
 
 (deftest vector-prod
   (let [prod (Vector3. 200 400 600)]
-    (is (= (k*v 2 v2) prod))))
+    (is (= (*k v2 2) prod))))
 
 (deftest vector-dot
   (let [dot-prod (+ 100 400 900)]
@@ -50,7 +50,7 @@
 
 (deftest point-addition
   (let [p (Point3. 1 2 3)]
-    (is (= p (p+v p-zero v1)))))
+    (is (= p (+v p-zero v1)))))
 
 (deftest position-test
   (let [t 2
@@ -63,12 +63,12 @@
          [-1.0 -3.0])))
 
 (deftest brighten-test
-  (is (= (k*col 0.5 red)
+  (is (= (*k red 0.5)
          (Color. 0.5 0.0 0.0))))
 
 (deftest add-col-test
-  (is (= (col+ blue
-               (col+ red green))
+  (is (= (+col blue
+               (+col red green))
          white)))
 
 (deftest clamp-test
@@ -76,6 +76,6 @@
          (clamp (Color. 2.0 0.0 0.0)))))
 
 (deftest color-combine-test
-  (is (= (col* red green) black)))
+  (is (= (*col red green) black)))
 
 (run-tests 'rt.core-test)
