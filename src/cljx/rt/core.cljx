@@ -530,7 +530,7 @@ typed array buffers as the backing store?
           (Point3. x y 0.0)))
 
 ;; this is exactly the sort of thing that matrix operations shine at.
-(ann pixel-grid [View Number Number -> (Seqable Point3)])
+(ann pixel-grid [View Number Number -> (IPersistentVector Point3)])
 (defn pixel-grid [{:keys [camera-pos view-dist looking-at view-up]}
                   width height]
   (let [grid          (empty-pixel-grid width height)
@@ -538,9 +538,10 @@ typed array buffers as the backing store?
         view-dir      (normalize (-p looking-at camera-pos))
         screen-center (+v camera-pos (*k view-dir view-dist))
         view-right    (cross view-up view-dir)]
-          (map (partial transform-point screen-center center-offset
-                        view-right view-up)
-               grid)))
+    (vec
+     (map (partial transform-point screen-center center-offset
+                                   view-right view-up)
+       grid))))
 ;; direly need to test
 
 ;; it is beautiful how add is implicitly defined for compound types
@@ -612,6 +613,9 @@ typed array buffers as the backing store?
         color-collection (map (partial raytrace scene 0)
                               ray-collection)]
     (vec color-collection)))
+
+
+;; PPM export functions...
 
 (ann ppm-color [Color -> String])
 (defn ppm-color [color]
