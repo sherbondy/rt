@@ -488,6 +488,8 @@ typed array buffers as the backing store?
 
 ;; VIEWING AND SCREEN
 
+;; view up really ought to be orthogonal to the view direction...
+;; view direction = (normalize (-p looking-at camera-pos))
 (ann-record View [camera-pos :- Point3, view-dist :- Number,
                   looking-at :- Point3, view-up :- Vector3])
 (defrecord View [camera-pos view-dist looking-at view-up])
@@ -506,7 +508,7 @@ typed array buffers as the backing store?
    (View. (Point3. 0 0 -100) 100 (Point3. 0 0 100) (Vector3. 0 1 0))
    [(Plane. (Vector3. 0 -1 0) 50 shiny-red)
     (Sphere. (Point3. 50 10 100) 40 semi-shiny-green)
-    (Sphere. (Point3. -80 0 80) 50 checked-matt)]
+    (Sphere. (Point3. -80 0 80) 50 shiny-white)]
    black
    (Color. 0.1 0.1 0.1)
    [(Spotlight. (Point3. 100 -30 0) nearly-white)
